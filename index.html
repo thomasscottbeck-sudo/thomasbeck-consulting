@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thomas Beck — AI Operations Advisory</title>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --bg2: #101a32;
+    --panel: rgba(16, 23, 41, 0.84);
+    --ink: #e9ecf2;
+    --muted: #9aa4b8;
+    --accent: #d4a843;
+    --accent-dim: #a8842f;
+    --gold: #6ea8dc;
+    --rule: #25304a;
+    --good: #5fae7f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: var(--bg); color: var(--ink);
+    font-family: "Avenir Next", "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
+
+  /* animated background */
+  #bgcanvas { position: fixed; inset: 0; z-index: 0; }
+  .vignette { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+    background:
+      radial-gradient(ellipse 90% 70% at 30% 40%, transparent 0%, rgba(5,8,17,.55) 100%),
+      linear-gradient(160deg, rgba(10,18,40,.25) 0%, rgba(4,7,15,.65) 100%);
+  }
+
+  .deck { position: relative; height: 100vh; width: 100vw; z-index: 2; }
+  .slide {
+    position: absolute; inset: 0; display: none; flex-direction: column;
+    justify-content: center; padding: 7vh 9vw; opacity: 0;
+    transition: opacity .35s ease;
+  }
+  .slide.active { display: flex; opacity: 1; }
+  .kicker {
+    font-size: 13px; letter-spacing: .28em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 22px; font-weight: 600;
+  }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 5.2vw, 64px);
+    font-weight: 600; line-height: 1.12; margin-bottom: 24px; text-shadow: 0 2px 24px rgba(0,0,0,.45); }
+  h2 { font-family: Georgia, serif; font-size: clamp(26px, 3.6vw, 44px);
+    font-weight: 600; line-height: 1.15; margin-bottom: 28px; text-shadow: 0 2px 18px rgba(0,0,0,.4); }
+  .sub { font-size: clamp(16px, 1.6vw, 21px); color: var(--muted); max-width: 880px; line-height: 1.55; }
+  .accent { color: var(--accent); }
+
+  .grid { display: grid; gap: 18px; margin-top: 36px; }
+  .g3 { grid-template-columns: 1fr 1fr 1fr; }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .card {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 26px 26px 24px; backdrop-filter: blur(6px);
+    box-shadow: 0 8px 32px rgba(0,0,0,.35);
+  }
+  .card h3 { font-size: 17px; margin-bottom: 10px; color: var(--ink); font-weight: 700; }
+  .card p { font-size: 14.5px; color: var(--muted); line-height: 1.55; }
+  .card .tag { display: inline-block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid var(--accent-dim); border-radius: 99px;
+    padding: 3px 10px; margin-bottom: 14px; font-weight: 600; }
+  .card .tag.soon { color: var(--gold); border-color: var(--gold); }
+
+  .stat { text-align: left; }
+  .stat .n { font-family: Georgia, serif; font-size: clamp(34px, 4.4vw, 58px); color: var(--accent); line-height: 1; }
+  .stat .l { font-size: 13.5px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
+
+  ul.clean { list-style: none; margin-top: 28px; max-width: 920px; }
+  ul.clean li { padding: 14px 0 14px 34px; position: relative; border-bottom: 1px solid var(--rule);
+    font-size: clamp(15px, 1.5vw, 18.5px); line-height: 1.5; color: var(--ink); }
+  ul.clean li:before { content: ""; position: absolute; left: 4px; top: 21px;
+    width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 12px rgba(212,168,67,.55); }
+  ul.clean li b { color: var(--accent); font-weight: 700; }
+  ul.clean li span { color: var(--muted); }
+
+  .price { font-family: Georgia, serif; font-size: 30px; color: var(--ink); margin: 6px 0 4px; }
+  .per { font-size: 13px; color: var(--muted); }
+
+  .footer-note { margin-top: 34px; font-size: 13.5px; color: var(--muted); }
+  .footer-note b { color: var(--accent); }
+
+  /* nav */
+  .nav { position: fixed; bottom: 26px; left: 0; right: 0; display: flex;
+    justify-content: center; align-items: center; gap: 10px; z-index: 10; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--rule);
+    cursor: pointer; transition: all .2s; border: none; }
+  .dot.on { background: var(--accent); transform: scale(1.35); box-shadow: 0 0 10px rgba(212,168,67,.7); }
+  .arrows { position: fixed; bottom: 18px; right: 28px; z-index: 10; display: flex; gap: 8px; }
+  .arrows button {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--rule);
+    border-radius: 8px; font-size: 18px; width: 42px; height: 38px; cursor: pointer;
+  }
+  .arrows button:hover { border-color: var(--accent); color: var(--accent); }
+  .counter { position: fixed; bottom: 26px; left: 28px; color: var(--muted); font-size: 13px; z-index: 10; }
+  .clickzone-r { position: fixed; top: 0; right: 0; width: 18vw; height: 88vh; cursor: e-resize; z-index: 5; }
+  .clickzone-l { position: fixed; top: 0; left: 0; width: 12vw; height: 88vh; cursor: w-resize; z-index: 5; }
+
+  .flow { display: flex; align-items: stretch; gap: 0; margin-top: 38px; }
+  .step { flex: 1; background: var(--panel); border: 1px solid var(--rule); padding: 24px 20px;
+    backdrop-filter: blur(6px); }
+  .step:first-child { border-radius: 12px 0 0 12px; }
+  .step:last-child { border-radius: 0 12px 12px 0; }
+  .step .num { font-family: Georgia, serif; font-size: 15px; color: var(--accent); margin-bottom: 10px; }
+  .step h3 { font-size: 15.5px; margin-bottom: 8px; }
+  .step p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  .quoteline { font-family: Georgia, serif; font-style: italic; font-size: clamp(19px, 2.2vw, 27px);
+    color: var(--ink); line-height: 1.5; max-width: 950px; margin-top: 10px; }
+  .small { font-size: 13px; color: var(--muted); }
+  td, th { text-align: left; padding: 13px 18px 13px 0; font-size: 15px; }
+  th { color: var(--accent); font-size: 12.5px; letter-spacing: .14em; text-transform: uppercase; }
+  tr { border-bottom: 1px solid var(--rule); }
+  table { border-collapse: collapse; margin-top: 30px; width: 100%; max-width: 980px;
+    background: var(--panel); backdrop-filter: blur(6px); border-radius: 12px; }
+  table td:first-child, table th:first-child { padding-left: 20px; }
+  .x { color: #c96a5a; } .check { color: var(--good); }
+  a { color: var(--accent); text-decoration: none; }
+
+  /* torus accent on title */
+  #torus { position: fixed; right: 4vw; top: 50%; transform: translateY(-50%);
+    z-index: 1; opacity: .85; pointer-events: none; transition: opacity .4s; }
+  #torus.hide { opacity: 0; }
+</style>
+</head>
+<body>
+<canvas id="bgcanvas"></canvas>
+<canvas id="torus" width="640" height="640"></canvas>
+<div class="vignette"></div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 · TITLE -->
+  <section class="slide active">
+    <div class="kicker">AI Operations Advisory</div>
+    <h1>From AI adoption<br>to <span class="accent">AI operations.</span></h1>
+    <p class="sub">Advisory and implementation for companies that want artificial intelligence working in production — measured in hours returned and processes retired, not licenses purchased. I design, build, and operate these systems daily as Chief of Staff at a venture-backed fintech.</p>
+    <div class="footer-note">Thomas Beck &nbsp;·&nbsp; Chief of Staff, seed-stage payments infrastructure company &nbsp;·&nbsp; Yale, B.A. Economics &nbsp;·&nbsp; M.S. Business Analytics &nbsp;·&nbsp; formerly investment banking &amp; private equity</div>
+  </section>
+
+  <!-- 2 · PROBLEM -->
+  <section class="slide">
+    <div class="kicker">The Problem</div>
+    <h2>Adoption is not deployment.</h2>
+    <p class="quoteline">Most companies have purchased AI. Very few have AI that reliably carries operational work — every day, with appropriate controls.</p>
+    <ul class="clean">
+      <li><b>Idle licenses.</b> <span>Tools acquired over the past two years that were never integrated into actual workflows.</span></li>
+      <li><b>Prototype-grade automation.</b> <span>Workflows that performed well in a demonstration and degrade quietly within weeks, unnoticed.</span></li>
+      <li><b>Absent governance.</b> <span>AI is either permitted to touch nothing or trusted with everything. Neither posture survives contact with real operations.</span></li>
+      <li><b>No accountable owner.</b> <span>AI initiatives sit with whoever has spare capacity, rather than with an operator responsible for outcomes.</span></li>
+    </ul>
+  </section>
+
+  <!-- 3 · WHO -->
+  <section class="slide">
+    <div class="kicker">Background</div>
+    <h2>An operator, not a vendor.</h2>
+    <p class="sub">I serve as Chief of Staff at an $8M seed-stage cross-border payments company, where I oversee finance, hiring, and partner operations — supported by an AI operating system of my own design. Every capability I offer is one I currently run in production, on a business I am accountable for.</p>
+    <div class="grid g4">
+      <div class="card stat"><div class="n">3</div><div class="l">production agents in daily operation — recruiting, revenue operations, and partner management — each with dedicated structured memory</div></div>
+      <div class="card stat"><div class="n">5,000+</div><div class="l">source-grounded records in a structured data warehouse queried by these systems daily</div></div>
+      <div class="card stat"><div class="n">60+</div><div class="l">automated workflows in continuous operation across recruiting, revenue, and corporate functions</div></div>
+      <div class="card stat"><div class="n">850+</div><div class="l">candidate applications evaluated by an AI screening pipeline of my own construction</div></div>
+    </div>
+  </section>
+
+  <!-- 4 · PROOF -->
+  <section class="slide">
+    <div class="kicker">Evidence</div>
+    <h2>Systems currently in production.</h2>
+    <ul class="clean">
+      <li><b>Recruiting operations.</b> <span>Every inbound application is ingested, evaluated against role criteria, and tiered; interview summaries and correspondence are drafted for human approval. 1,600+ candidates processed.</span></li>
+      <li><b>Meeting-to-CRM intelligence.</b> <span>Sales conversations are transcribed, mined for deal-relevant facts, and reconciled into the CRM through approval-gated writes — keeping pipeline data current without manual entry.</span></li>
+      <li><b>Financial operations.</b> <span>An institutional-grade operating model with AI-assisted audit procedures that identified material reporting errors ahead of a board meeting.</span></li>
+      <li><b>Institutional memory.</b> <span>Meetings, correspondence, and decisions are captured into a queryable knowledge system — prior context retrievable in seconds rather than reconstructed from recollection.</span></li>
+      <li><b>Self-monitoring infrastructure.</b> <span>Every workflow carries health monitoring and automated remediation. Failures announce themselves; silence indicates health.</span></li>
+    </ul>
+  </section>
+
+  <!-- 5 · SERVICES -->
+  <section class="slide">
+    <div class="kicker">Engagement Structure</div>
+    <h2>Three lines of service.</h2>
+    <div class="grid g3">
+      <div class="card">
+        <div class="tag">Assess</div>
+        <h3>AI Operations Assessment</h3>
+        <p>A two-week diagnostic across your workflows: process mapping, automation ROI scoring, an audit of existing tooling, and a sequenced implementation plan with cost estimates. The plan is yours to execute with any partner.</p>
+      </div>
+      <div class="card">
+        <div class="tag">Implement</div>
+        <h3>Implementation Sprint</h3>
+        <p>One complete system delivered end-to-end — recruiting operations, meeting-to-CRM, financial reporting, or a custom workflow. Built transparently on your own accounts and infrastructure, fully documented, with no proprietary lock-in.</p>
+      </div>
+      <div class="card">
+        <div class="tag">Operate</div>
+        <h3>Fractional AI Operations</h3>
+        <p>An ongoing mandate: monitoring, maintenance, and extension of your systems, continuous evaluation of new tooling, and senior counsel on AI strategy — without a dedicated executive hire.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · SYSTEMS MENU -->
+  <section class="slide">
+    <div class="kicker">Capabilities</div>
+    <h2>Representative systems.</h2>
+    <div class="grid g3">
+      <div class="card"><div class="tag">In production</div><h3>Recruiting Operations</h3><p>Automated intake, evaluation, tiering, and interview documentation for every candidate — built for teams hiring without dedicated recruiters.</p></div>
+      <div class="card"><div class="tag">In production</div><h3>Meeting-to-CRM</h3><p>Conversations become structured deal intelligence and approved CRM updates. Pipeline data remains current without manual discipline.</p></div>
+      <div class="card"><div class="tag">In production</div><h3>Institutional Memory</h3><p>A searchable record of meetings, correspondence, and decisions across the organization — accelerating onboarding and eliminating repeated context-gathering.</p></div>
+      <div class="card"><div class="tag">In production</div><h3>Financial Reporting</h3><p>Board-grade reporting automation, model integrity checks, and budget-versus-actual monitoring.</p></div>
+      <div class="card"><div class="tag soon">Advanced</div><h3>Voice &amp; Chat Intake</h3><p>AI front-of-house for inbound calls and web inquiries — qualification, response, and routing with structured human escalation.</p></div>
+      <div class="card"><div class="tag soon">Advanced</div><h3>Custom Domain Agents</h3><p>A purpose-built agent for your most constrained function — claims, quoting, support, scheduling — with dedicated memory and defined authority boundaries.</p></div>
+    </div>
+  </section>
+
+  <!-- 7 · METHOD -->
+  <section class="slide">
+    <div class="kicker">Operating Principles</div>
+    <h2>Reliability is the product.</h2>
+    <p class="sub">The market is saturated with demonstration-grade automation. The discipline below is what keeps systems in service at month three — and it is the standard every engagement is built to.</p>
+    <div class="flow">
+      <div class="step"><div class="num">01</div><h3>Human-in-the-loop by design</h3><p>AI carries the repetitive majority of the work; your team retains the judgment calls. Writes to systems of record require approval.</p></div>
+      <div class="step"><div class="num">02</div><h3>Full transparency and ownership</h3><p>Systems are built on your accounts and infrastructure, fully documented. You retain complete ownership and operational continuity, independent of me.</p></div>
+      <div class="step"><div class="num">03</div><h3>Self-reporting systems</h3><p>Every workflow carries health monitoring and alerting. Failures are surfaced immediately rather than discovered downstream.</p></div>
+      <div class="step"><div class="num">04</div><h3>Data governance by routing</h3><p>Sensitive material can be processed on locally hosted models; only approved data reaches cloud providers. Spend is capped per workflow.</p></div>
+      <div class="step"><div class="num">05</div><h3>Resident oversight agent</h3><p>Each engagement includes a dedicated monitoring agent on your infrastructure — observing system health, resolving routine issues autonomously, and escalating directly to me through a shared channel.</p></div>
+    </div>
+  </section>
+
+  <!-- 8 · ENGAGEMENT -->
+  <section class="slide">
+    <div class="kicker">Commercial Terms</div>
+    <h2>Fixed-fee, outcome-oriented.</h2>
+    <div class="grid g3">
+      <div class="card">
+        <div class="tag">Two weeks</div>
+        <h3>Operations Assessment</h3>
+        <div class="price">$3,500</div>
+        <div class="per">fixed fee · credited against implementation</div>
+        <p style="margin-top:14px">Workflow map, tooling audit, ROI-ranked automation plan with build estimates.</p>
+      </div>
+      <div class="card">
+        <div class="tag">Three to six weeks</div>
+        <h3>Implementation Sprint</h3>
+        <div class="price">$6,000–12,000</div>
+        <div class="per">per system · scoped fixed fee</div>
+        <p style="margin-top:14px">One production system: built, documented, monitored, and transferred.</p>
+      </div>
+      <div class="card">
+        <div class="tag">Monthly</div>
+        <h3>Fractional AI Operations</h3>
+        <div class="price">$2,000–4,000</div>
+        <div class="per">per month · no long-term commitment</div>
+        <p style="margin-top:14px">Resident oversight agent, maintenance, extensions, and a compounding AI roadmap.</p>
+      </div>
+    </div>
+    <div class="footer-note"><b>Assessment guarantee:</b> if the diagnostic does not identify automation opportunities worth at least ten times its fee in annual labor savings, the fee is waived.</div>
+  </section>
+
+  <!-- 9 · VS -->
+  <section class="slide">
+    <div class="kicker">Positioning</div>
+    <h2>Relative to the alternatives.</h2>
+    <table>
+      <tr><th></th><th>This engagement</th><th>Typical AI agency</th><th>Full-time hire</th></tr>
+      <tr><td class="small">Operates these systems daily within a real company</td><td class="check">Yes</td><td class="x">Rarely — template resale is common</td><td class="small">Varies</td></tr>
+      <tr><td class="small">Fluency in finance and operations, not solely engineering</td><td class="check">Yes — IB-trained; runs corporate FP&amp;A</td><td class="x">Uncommon</td><td class="small">Uncommon</td></tr>
+      <tr><td class="small">Client retains full system ownership</td><td class="check">Always</td><td class="x">Frequently locked in</td><td class="check">Yes</td></tr>
+      <tr><td class="small">Approval gates and health monitoring as standard</td><td class="check">Yes</td><td class="x">Demonstration-grade</td><td class="small">Depends</td></tr>
+      <tr><td class="small">Annual cost</td><td class="check">$10–50K</td><td class="small">$30–100K</td><td class="x">$200K+</td></tr>
+    </table>
+  </section>
+
+  <!-- 10 · CTA -->
+  <section class="slide">
+    <div class="kicker">Proposed First Step</div>
+    <h1>One workflow.<br><span class="accent">Thirty days.</span><br>Results measured in hours returned.</h1>
+    <p class="sub" style="margin-top:18px">Select the most burdensome recurring process in your organization. I will automate it end-to-end with full governance, and we will measure the outcome against an agreed baseline. If it does not deliver the projected savings, the ongoing engagement carries no fee.</p>
+    <div class="footer-note" style="font-size:16px; margin-top:44px">
+      <b>Thomas Beck</b> &nbsp;·&nbsp; thomasscottbeck@gmail.com &nbsp;·&nbsp; 801.631.2080 &nbsp;·&nbsp; <a href="https://www.linkedin.com/in/thomas-s-beck/">linkedin.com/in/thomas-s-beck</a>
+    </div>
+  </section>
+
+</div>
+
+<div class="counter" id="counter">1 / 10</div>
+<div class="nav" id="dots"></div>
+<div class="arrows">
+  <button onclick="go(-1)">←</button>
+  <button onclick="go(1)">→</button>
+</div>
+<div class="clickzone-l" onclick="go(-1)"></div>
+<div class="clickzone-r" onclick="go(1)"></div>
+
+<script>
+  /* ---------- slide nav ---------- */
+  const slides = [...document.querySelectorAll('.slide')];
+  const dots = document.getElementById('dots');
+  let i = 0;
+  slides.forEach((_, k) => {
+    const d = document.createElement('button');
+    d.className = 'dot' + (k === 0 ? ' on' : '');
+    d.onclick = () => show(k);
+    dots.appendChild(d);
+  });
+  function show(k) {
+    i = Math.max(0, Math.min(slides.length - 1, k));
+    slides.forEach((s, n) => s.classList.toggle('active', n === i));
+    [...dots.children].forEach((d, n) => d.classList.toggle('on', n === i));
+    document.getElementById('counter').textContent = (i + 1) + ' / ' + slides.length;
+    /* torus only on title + CTA */
+    document.getElementById('torus').classList.toggle('hide', !(i === 0 || i === 9));
+  }
+  function go(d) { show(i + d); }
+  addEventListener('keydown', e => {
+    if (['ArrowRight',' ','PageDown'].includes(e.key)) { e.preventDefault(); go(1); }
+    if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); go(-1); }
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End') show(slides.length - 1);
+  });
+
+  /* ---------- particle wave background (Tolken-style emerald drift) ---------- */
+  const bg = document.getElementById('bgcanvas');
+  const bctx = bg.getContext('2d');
+  let W, H, parts = [];
+  function sizeBG() {
+    W = bg.width = innerWidth * devicePixelRatio;
+    H = bg.height = innerHeight * devicePixelRatio;
+  }
+  sizeBG(); addEventListener('resize', sizeBG);
+  const N = 420;
+  for (let p = 0; p < N; p++) {
+    parts.push({
+      x: Math.random(), y: Math.random(),
+      s: .4 + Math.random() * 1.4,          // size
+      a: .12 + Math.random() * .5,          // alpha
+      ph: Math.random() * Math.PI * 2       // phase
+    });
+  }
+  function field(x, y, t) {
+    /* gentle flow field — layered sines make the wave bands */
+    const ang = Math.sin(y * 4.2 + t * .18) * 1.1
+              + Math.sin(x * 2.6 - t * .11) * .7
+              + Math.sin((x + y) * 1.7 + t * .07) * .5;
+    return ang;
+  }
+  let t0 = 0;
+  function drawBG(ts) {
+    const t = ts / 1000;
+    /* deep teal gradient base */
+    const g = bctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#0c1428');
+    g.addColorStop(.5, '#090e1c');
+    g.addColorStop(1, '#101c36');
+    bctx.fillStyle = g;
+    bctx.fillRect(0, 0, W, H);
+
+    for (const p of parts) {
+      const ang = field(p.x, p.y, t);
+      p.x += Math.cos(ang) * .00045 * p.s;
+      p.y += Math.sin(ang) * .00032 * p.s;
+      if (p.x < -0.02) p.x = 1.02; if (p.x > 1.02) p.x = -0.02;
+      if (p.y < -0.02) p.y = 1.02; if (p.y > 1.02) p.y = -0.02;
+      const tw = .55 + .45 * Math.sin(t * 1.2 + p.ph);          // twinkle
+      const band = .35 + .65 * Math.pow(Math.abs(Math.sin(p.y * 3.1 + t * .15)), 2); // brighter in wave bands
+      bctx.globalAlpha = p.a * tw * band;
+      bctx.fillStyle = '#6ea8dc';
+      const r = p.s * devicePixelRatio;
+      bctx.beginPath();
+      bctx.arc(p.x * W, p.y * H, r, 0, 7);
+      bctx.fill();
+    }
+    bctx.globalAlpha = 1;
+    requestAnimationFrame(drawBG);
+  }
+  requestAnimationFrame(drawBG);
+
+  /* ---------- dotted 3-D torus accent (Frame-3 style ring) ---------- */
+  const tc = document.getElementById('torus');
+  const tctx = tc.getContext('2d');
+  const TP = [];
+  const R1 = 190, R2 = 78;            // major / minor radius
+  for (let u = 0; u < 64; u++) {
+    for (let v = 0; v < 26; v++) {
+      TP.push({ u: u / 64 * Math.PI * 2, v: v / 26 * Math.PI * 2 });
+    }
+  }
+  function drawTorus(ts) {
+    const t = ts / 1000;
+    tctx.clearRect(0, 0, 640, 640);
+    const rotX = .9 + Math.sin(t * .13) * .12;
+    const rotZ = t * .12;
+    const pts = [];
+    for (const p of TP) {
+      /* torus point */
+      let x = (R1 + R2 * Math.cos(p.v)) * Math.cos(p.u + rotZ * .35);
+      let y = (R1 + R2 * Math.cos(p.v)) * Math.sin(p.u + rotZ * .35);
+      let z = R2 * Math.sin(p.v);
+      /* rotate around X */
+      const y2 = y * Math.cos(rotX) - z * Math.sin(rotX);
+      const z2 = y * Math.sin(rotX) + z * Math.cos(rotX);
+      /* perspective */
+      const persp = 560 / (560 + z2 + 240);
+      pts.push({ sx: 320 + x * persp, sy: 320 + y2 * persp, z: z2, persp });
+    }
+    pts.sort((a, b) => a.z - b.z);
+    for (const q of pts) {
+      const depth = (q.z + R2 + 40) / (2 * R2 + 80);
+      tctx.globalAlpha = .12 + .55 * depth;
+      tctx.fillStyle = depth > .62 ? '#d4a843' : '#2a4a7a33';
+      tctx.beginPath();
+      tctx.arc(q.sx, q.sy, 1.5 + 1.3 * q.persp * depth, 0, 7);
+      tctx.fill();
+    }
+    tctx.globalAlpha = 1;
+    requestAnimationFrame(drawTorus);
+  }
+  requestAnimationFrame(drawTorus);
+</script>
+</body>
+</html>
